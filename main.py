@@ -1,64 +1,162 @@
-import gmsh_api.gmsh as gmsh
-import os.path
-from simnibs import sim_struct, run_simnibs
-from datetime import datetime
+import GUI
+import simulation
+import sys
+from PyQt5 import QtWidgets, QtCore, QtGui
+import pyqtgraph as pg
+import numpy as np
+import os
+import time
+import random
 
-filename = 'sphere'
 
-if not os.path.isfile('models/nonMRI/{0}/{0}.msh'.format(filename)):
-    print("{0}.msh file does not exist yet, creating one from .stl files".format(filename))
-    gmsh.initialize()
-    current = 1
-    if not os.path.isfile('models/nonMRI/{0}/{0}Scalp.stl'.format(filename)):
-        raise FileNotFoundError("Scalp stl file does not exist")
-    gmsh.merge('models/nonMRI/{0}/{0}Scalp.stl'.format(filename))
-    gmsh.model.geo.addSurfaceLoop([current], 5)
-    gmsh.model.geo.addVolume([5], 5)
-    print("Added Scalp information")
-    current = current + 1
-    if os.path.isfile('models/nonMRI/{0}/{0}Skull.stl'.format(filename)):
-        gmsh.merge('models/nonMRI/{0}/{0}Skull.stl'.format(filename))
-        gmsh.model.geo.addSurfaceLoop([current], 4)
-        gmsh.model.geo.addVolume([4], 4)
-        print("Added Skull information")
-        current = current + 1
-    if os.path.isfile('models/nonMRI/{0}/{0}Brain.stl'.format(filename)):
-        gmsh.merge('models/nonMRI/{0}/{0}Brain.stl'.format(filename))
-        gmsh.model.geo.addSurfaceLoop([current], 2)
-        gmsh.model.geo.addVolume([2], 2)
-        print("Added Brain information")
-    gmsh.model.geo.synchronize()
-    print("Generating mesh...")
-    gmsh.model.mesh.generate(3)
-    print("Writing mesh")
-    gmsh.write('models/nonMRI/{0}/{0}.msh'.format(filename))
-    gmsh.finalize()
-    print("Successfully created {0}.msh".format(filename))
-else:
-    print("Found {0}.msh".format(filename))
+class ApplicationHandler:
+    def __init__(self):
+        app = QtWidgets.QApplication(sys.argv)
+        self.MainWindow = QtWidgets.QMainWindow()
+        self.filename = ""
+        self.ui = GUI.Ui_MainWindow()
+        self.ui.setupUi(self.MainWindow)
+        self.ui.actionOpen_mesh.triggered.connect(self.open_msh)
+        self.ui.actionCreate_mesh.triggered.connect(self.open_stl)
+        self.ui.pushButton.clicked.connect(self.run)
+        self.MainWindow.show()
+        self.ydata = np.array([])
+        self.ydata2 = np.array([])
+        self.xdata = self.ydata
+        self.timer = QtCore.QTimer()
+        self.timer.setTimerType(QtCore.Qt.PreciseTimer)
+        self.timer.timeout.connect(self.update_graphs)
+        self.lines = []
+        self.freq = 100
+        self.start = 0
+        self.rampup = 5
+        self.stimdur = 10
+        self.rampdown = 5
+        self.pause = 10
+        self.repeats = 5
+        self.mutex = QtCore.QMutex()
 
-s = sim_struct.SESSION()
-s.fnamehead = 'models/nonMRI/{0}/{0}.msh'.format(filename)
-s.pathfem = 'outputs/output_{}/'.format(datetime.now().strftime("%d-%m-%y_%H:%M"))
+        test = self.ui.graphicsView
+        test.setBackground((0, 0, 0, 0))
+        sys.exit(app.exec_())
 
-tdcslist = s.add_tdcslist()
-tdcslist.currents = [-1e-3, 1e-3]
-tdcslist.cond[1].value = 2
-tdcslist.cond[4].value = 0.01
+    def open_msh(self):
+        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "QtWidgets.QFileDialog.getOpenFileName()")
+        file = os.path.basename(self.filename)
+        self.ui.progressBar.setProperty("value", 100)
+        if file == "":
+            self.ui.label_9.setText("No model selected")
+        else:
+            self.ui.label_9.setText("Selected: " + file)
 
-cathode = tdcslist.add_electrode()
-cathode.channelnr = 1
-cathode.dimensions = [50, 70]
-cathode.shape = 'rect'
-cathode.thickness = 5
-cathode.centre = [-64.129707, 10.149533, 66.025742]  # 'C3'
-# cathode.pos_ydir = 'Cz'
+    def open_stl(self):
+        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "QtWidgets.QFileDialog.getOpenFileName()")
+        # TODO
+        # import gmsh_api.gmsh as gmsh
+        # filename = 'model'
+        #
+        # if not os.path.isfile('models/nonMRI/{0}/{0}.msh'.format(filename)):
+        #     print("{0}.msh file does not exist yet, creating one from .stl files".format(filename))
+        #     gmsh.initialize()
+        #     current = 1
+        #     if not os.path.isfile('models/nonMRI/{0}/{0}Scalp.stl'.format(filename)):
+        #         raise FileNotFoundError("Scalp stl file does not exist")
+        #     gmsh.merge('models/nonMRI/{0}/{0}Scalp.stl'.format(filename))
+        #     gmsh.model.geo.addSurfaceLoop([current], 5)
+        #
+        #     print("Added Scalp information")
+        #     current = current + 1
+        #     if os.path.isfile('models/nonMRI/{0}/{0}Skull.stl'.format(filename)):
+        #         gmsh.merge('models/nonMRI/{0}/{0}Skull.stl'.format(filename))
+        #         gmsh.model.geo.addSurfaceLoop([current], 4)
+        #         gmsh.model.geo.addVolume([4], 4)
+        #         print("Added Skull information")
+        #         current = current + 1
+        #     if os.path.isfile('models/nonMRI/{0}/{0}Brain.stl'.format(filename)):
+        #         gmsh.merge('models/nonMRI/{0}/{0}Brain.stl'.format(filename))
+        #         gmsh.model.geo.addSurfaceLoop([current], 2)
+        #
+        #         print("Added Brain information")
+        #
+        #     gmsh.model.geo.addVolume([5, 2], 5)
+        #     gmsh.model.geo.addVolume([2], 2)
+        #     gmsh.model.geo.synchronize()
+        #     print("Generating mesh...")
+        #     gmsh.model.mesh.generate(3)
+        #     print("Writing mesh")
+        #     gmsh.write('models/nonMRI/{0}/{0}.msh'.format(filename))
+        #     gmsh.finalize()
+        #     print("Successfully created {0}.msh".format(filename))
 
-anode = tdcslist.add_electrode()
-anode.channelnr = 2
-anode.dimensions = [30, 30]
-anode.shape = 'ellipse'
-anode.thickness = 5
-anode.centre = [67.828148, 11.505963, 65.788376]  # 'C4'
+    def run(self):
+        if self.filename == "" and False:
+            print("No model selected!")
+        else:
+            if self.filename == "":
+                self.filename = "/home/leroy/Thesis/Code/models/nonMRI/model/model.msh"
+            currents = []
+            for x in range(3):
+                currents.append(float(self.ui.tableWidget.item(x, 0).text())/1000)
+            # file = simulation.run(self.filename, currents)
+            # peak = np.array(simulation.analyse(file))
 
-run_simnibs(s)
+            peak = np.array([0.1, 0.2, 0.3])
+
+            self.rampup = 5
+            self.stimdur = 10
+            self.rampdown = 5
+            self.pause = 10
+            self.repeats = 5
+            self.freq = 10
+
+            x = np.arange(0, 5*(5+10+5+10), 1.0/self.freq)
+            y = np.zeros([len(peak), len(x)])
+
+            for i, timestep in enumerate(x):
+                timestep %= self.rampup+self.stimdur+self.rampdown+self.pause
+                if timestep < self.rampup:
+                    y[:, i] = peak * timestep / self.repeats
+                elif self.rampup+self.stimdur < timestep < self.rampup+self.stimdur+self.rampdown:
+                    y[:, i] = peak * (1 - (timestep - self.rampup - self.stimdur) / self.repeats)
+                elif timestep >= self.rampup + self.stimdur + self.rampdown:
+                    y[:, i] = 0
+                else:
+                    y[:, i] = peak
+
+            test = self.ui.graphicsView
+            for i in range(len(peak)):
+                plott = test.addPlot(row=i, col=0)
+                plott.plot(x=x, y=y[i], pen=pg.mkPen(0.6, width=2), antialias=True)
+                plott.plot(x=x[0:1], y=y[i, 0:1], pen=pg.mkPen(color='r', width=2), antialias=True)
+                if i == 0:
+                    plott.getViewBox().register("test")
+                else:
+                    plott.getViewBox().linkView(pg.ViewBox.XAxis, "test")
+                plott.getViewBox().setMouseEnabled(y=False)
+                plott.getViewBox().setLimits(xMin=0, xMax=x[-1])
+                plott.getViewBox().setRange(yRange=(-.05, 0.35))
+                plott.showGrid(y=True, alpha=0.9)
+                self.lines.append(plott.addLine(x=0, pen=pg.mkPen(color=(255, 0, 0))))
+
+            self.start = time.time()
+            self.timer.start(10)
+            self.ydata = y
+            self.ydata2 = y + np.random.uniform(-0.01, 0.01, size=y.shape)
+            self.xdata = x
+
+    def update_graphs(self):
+        test = self.ui.graphicsView
+        curtime = time.time() - self.start
+        for i in range(3):
+            plt = test.getItem(i, 0)
+            plt.disableAutoRange()
+            a = plt.listDataItems()[1]
+            self.mutex.lock()
+            a.setData(x=self.xdata[:int(curtime*self.freq)], y=self.ydata2[i, :int(curtime*self.freq)])
+            # a.setData(x=self.xdata, y=self.ydata2[i])
+            self.mutex.unlock()
+            self.lines[i].setValue(curtime)
+
+
+if __name__ == "__main__":
+    ApplicationHandler()
