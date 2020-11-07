@@ -1,12 +1,13 @@
 import GUI
-import simulation
+import Simulation
 import sys
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import numpy as np
 import os
 import time
-import random
+from Sensor import Sensor
+from SensorData import SensorData
 
 
 class ApplicationHandler:
@@ -20,11 +21,7 @@ class ApplicationHandler:
         self.ui.actionCreate_mesh.triggered.connect(self.open_stl)
         self.ui.pushButton.clicked.connect(self.run)
         self.MainWindow.show()
-        self.ydata = np.array([])
-        self.ydata2 = np.array([])
-        self.xdata = self.ydata
         self.timer = QtCore.QTimer()
-        self.timer.setTimerType(QtCore.Qt.PreciseTimer)
         self.timer.timeout.connect(self.update_graphs)
         self.lines = []
         self.freq = 100
@@ -35,6 +32,11 @@ class ApplicationHandler:
         self.pause = 10
         self.repeats = 5
         self.mutex = QtCore.QMutex()
+        self.threadpool = QtCore.QThreadPool()
+        self.data = SensorData()
+        self.xdata = []
+        self.ydata = []
+        self.sensors = []
 
         test = self.ui.graphicsView
         test.setBackground((0, 0, 0, 0))
@@ -128,6 +130,7 @@ class ApplicationHandler:
                 plott = test.addPlot(row=i, col=0)
                 plott.plot(x=x, y=y[i], pen=pg.mkPen(0.6, width=2), antialias=True)
                 plott.plot(x=x[0:1], y=y[i, 0:1], pen=pg.mkPen(color='r', width=2), antialias=True)
+                plott.setClipToView(True)
                 if i == 0:
                     plott.getViewBox().register("test")
                 else:
@@ -139,22 +142,26 @@ class ApplicationHandler:
                 self.lines.append(plott.addLine(x=0, pen=pg.mkPen(color=(255, 0, 0))))
 
             self.start = time.time()
+            for i in range(3):
+                self.sensors.append(Sensor(SensorData(), self.start))
+                self.threadpool.start(self.sensors[i])
+                self.xdata.append([])
+                self.ydata.append([])
             self.timer.start(10)
-            self.ydata = y
-            self.ydata2 = y + np.random.uniform(-0.01, 0.01, size=y.shape)
-            self.xdata = x
 
     def update_graphs(self):
         test = self.ui.graphicsView
         curtime = time.time() - self.start
+
         for i in range(3):
-            plt = test.getItem(i, 0)
-            plt.disableAutoRange()
-            a = plt.listDataItems()[1]
-            self.mutex.lock()
-            a.setData(x=self.xdata[:int(curtime*self.freq)], y=self.ydata2[i, :int(curtime*self.freq)])
-            # a.setData(x=self.xdata, y=self.ydata2[i])
-            self.mutex.unlock()
+            newData = self.sensors[i].data.getData()
+
+            if newData is not None:
+                plt = test.getItem(i, 0)
+
+                self.xdata[i].extend(newData[0])
+                self.ydata[i].extend(newData[1])
+                plt.listDataItems()[1].setData(x=self.xdata[i], y=self.ydata[i])
             self.lines[i].setValue(curtime)
 
 
