@@ -1,4 +1,3 @@
-import queue
 from PyQt5.QtCore import QObject, QMutex, QMutexLocker
 
 

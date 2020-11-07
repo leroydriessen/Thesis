@@ -1,13 +1,15 @@
-import GUI
-import Simulation
-import sys
-from PyQt5 import QtWidgets, QtCore, QtGui
-import pyqtgraph as pg
-import numpy as np
 import os
+import sys
 import time
+
+import numpy as np
+import pyqtgraph as pg
+from PyQt5 import QtWidgets, QtCore
+
+from GUI import Ui_MainWindow
 from Sensor import Sensor
 from SensorData import SensorData
+from Simulation import Simulation
 
 
 class ApplicationHandler:
@@ -15,7 +17,7 @@ class ApplicationHandler:
         app = QtWidgets.QApplication(sys.argv)
         self.MainWindow = QtWidgets.QMainWindow()
         self.filename = ""
-        self.ui = GUI.Ui_MainWindow()
+        self.ui = Ui_MainWindow()
         self.ui.setupUi(self.MainWindow)
         self.ui.actionOpen_mesh.triggered.connect(self.open_msh)
         self.ui.actionCreate_mesh.triggered.connect(self.open_stl)
@@ -25,31 +27,38 @@ class ApplicationHandler:
         self.timer.timeout.connect(self.update_graphs)
         self.lines = []
         self.freq = 100
-        self.start = 0
-        self.rampup = 5
-        self.stimdur = 10
-        self.rampdown = 5
+        self.start_time = 0
+        self.end_time = 0
+        self.ramp_up = 5
+        self.duration = 10
+        self.ramp_down = 5
         self.pause = 10
         self.repeats = 5
-        self.mutex = QtCore.QMutex()
-        self.threadpool = QtCore.QThreadPool()
-        self.data = SensorData()
-        self.xdata = []
-        self.ydata = []
+        self.thread_pool = QtCore.QThreadPool()
+        self.thread_pool.setExpiryTimeout(5)
+        self.x_data = []
+        self.y_data = []
         self.sensors = []
+        self.full = True
+        self.running = False
+        self.electrodes = [[30, 55, -10], [-20, 20, 20], [30, 30, 30]]
 
         test = self.ui.graphicsView
         test.setBackground((0, 0, 0, 0))
-        sys.exit(app.exec_())
+        code = app.exec_()
+        for sensor in self.sensors:
+            sensor.cancel()
+        self.thread_pool.waitForDone()
+        sys.exit(code)
 
     def open_msh(self):
         self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "QtWidgets.QFileDialog.getOpenFileName()")
         file = os.path.basename(self.filename)
         self.ui.progressBar.setProperty("value", 100)
         if file == "":
-            self.ui.label_9.setText("No model selected")
+            self.ui.modelSelection.setText("No model selected")
         else:
-            self.ui.label_9.setText("Selected: " + file)
+            self.ui.modelSelection.setText("Selected: " + file)
 
     def open_stl(self):
         self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "QtWidgets.QFileDialog.getOpenFileName()")
@@ -90,79 +99,129 @@ class ApplicationHandler:
         #     gmsh.finalize()
         #     print("Successfully created {0}.msh".format(filename))
 
+    def end_experiment(self):
+        self.thread_pool.waitForDone()
+        self.running = False
+        self.timer.stop()
+        self.sensors = []
+        self.ui.pushButton.setText("Run")
+
+    def restart(self):
+        self.running = False
+        self.timer.stop()
+        self.x_data = []
+        self.y_data = []
+        for sensor in self.sensors:
+            sensor.cancel()
+        self.sensors = []
+        self.thread_pool.waitForDone()
+        self.ui.graphicsView.clear()
+        self.ui.pushButton.setText("Run")
+        self.lines = []
+
     def run(self):
-        if self.filename == "" and False:
-            print("No model selected!")
+        if self.running:
+            self.restart()
         else:
-            if self.filename == "":
-                self.filename = "/home/leroy/Thesis/Code/models/nonMRI/model/model.msh"
-            currents = []
-            for x in range(3):
-                currents.append(float(self.ui.tableWidget.item(x, 0).text())/1000)
-            # file = simulation.run(self.filename, currents)
-            # peak = np.array(simulation.analyse(file))
+            if self.filename == "" and not self.full:
+                print("No model selected!")
+            else:
+                if self.filename == "":
+                    self.filename = "/home/leroy/Thesis/Code/models/nonMRI/sphere_models/sphere100.msh"
 
-            peak = np.array([0.1, 0.2, 0.3])
+                self.restart()
 
-            self.rampup = 5
-            self.stimdur = 10
-            self.rampdown = 5
-            self.pause = 10
-            self.repeats = 5
-            self.freq = 10
-
-            x = np.arange(0, 5*(5+10+5+10), 1.0/self.freq)
-            y = np.zeros([len(peak), len(x)])
-
-            for i, timestep in enumerate(x):
-                timestep %= self.rampup+self.stimdur+self.rampdown+self.pause
-                if timestep < self.rampup:
-                    y[:, i] = peak * timestep / self.repeats
-                elif self.rampup+self.stimdur < timestep < self.rampup+self.stimdur+self.rampdown:
-                    y[:, i] = peak * (1 - (timestep - self.rampup - self.stimdur) / self.repeats)
-                elif timestep >= self.rampup + self.stimdur + self.rampdown:
-                    y[:, i] = 0
+                self.running = True
+                self.ui.pushButton.setDisabled(True)
+                self.ui.pushButton.setCheckable(True)
+                self.ui.pushButton.setChecked(True)
+                self.ui.pushButton.setText("Stop")
+                currents = []
+                for x in range(3):
+                    currents.append(float(self.ui.electrodeTable.item(x, 0).text())/1000)
+                if self.full:
+                    simulation = Simulation(self.filename, currents, self.electrodes)
+                    simulation.communication.peak.connect(self.experiment)
+                    self.thread_pool.start(simulation)
                 else:
-                    y[:, i] = peak
+                    self.experiment(np.array([0.1, 0.2, 0.3]))
 
-            test = self.ui.graphicsView
-            for i in range(len(peak)):
-                plott = test.addPlot(row=i, col=0)
-                plott.plot(x=x, y=y[i], pen=pg.mkPen(0.6, width=2), antialias=True)
-                plott.plot(x=x[0:1], y=y[i, 0:1], pen=pg.mkPen(color='r', width=2), antialias=True)
-                plott.setClipToView(True)
-                if i == 0:
-                    plott.getViewBox().register("test")
-                else:
-                    plott.getViewBox().linkView(pg.ViewBox.XAxis, "test")
-                plott.getViewBox().setMouseEnabled(y=False)
-                plott.getViewBox().setLimits(xMin=0, xMax=x[-1])
-                plott.getViewBox().setRange(yRange=(-.05, 0.35))
-                plott.showGrid(y=True, alpha=0.9)
-                self.lines.append(plott.addLine(x=0, pen=pg.mkPen(color=(255, 0, 0))))
+    def experiment(self, peak):
+        self.ui.pushButton.setDisabled(False)
+        self.ui.pushButton.setCheckable(False)
 
-            self.start = time.time()
-            for i in range(3):
-                self.sensors.append(Sensor(SensorData(), self.start))
-                self.threadpool.start(self.sensors[i])
-                self.xdata.append([])
-                self.ydata.append([])
-            self.timer.start(10)
+        self.ramp_up = float(self.ui.rampup.text())
+        self.duration = float(self.ui.stimdur.text())
+        self.ramp_down = float(self.ui.rampdown.text())
+        self.pause = float(self.ui.pause.text())
+        self.repeats = int(self.ui.repeats.text())
+        self.freq = 10
+
+        sequence_time = self.ramp_up + self.duration + self.ramp_down + self.pause
+        x = np.arange(0, self.repeats * sequence_time, 1.0 / self.freq)
+        y = np.zeros([len(peak), len(x)])
+
+        for i, timestamp in enumerate(x):
+            timestamp %= self.ramp_up + self.duration + self.ramp_down + self.pause
+            if timestamp < self.ramp_up:
+                y[:, i] = peak * timestamp / self.ramp_up
+            elif self.ramp_up+self.duration < timestamp < self.ramp_up+self.duration+self.ramp_down:
+                y[:, i] = peak * (1 - (timestamp - self.ramp_up - self.duration) / self.ramp_down)
+            elif timestamp >= self.ramp_up + self.duration + self.ramp_down:
+                y[:, i] = 0
+            else:
+                y[:, i] = peak
+
+        y_min = max(max(v) for v in y)
+        y_max = min(min(v) for v in y)
+        y_range = y_max-y_min
+        margin = 0.2*y_range
+
+        for i in range(len(peak)):
+            plot_item = self.ui.graphicsView.addPlot(row=i, col=0)
+            plot_item.plot(x=x, y=y[i], pen=pg.mkPen(0.6, width=2), antialias=True)
+            plot_item.plot(x=x[0:1], y=y[i, 0:1], pen=pg.mkPen(color='r', width=2), antialias=True)
+            plot_item.setClipToView(True)
+            plot_item.showGrid(y=True, alpha=0.9)
+
+            view_box = plot_item.getViewBox()
+            if i == 0:
+                view_box.register("main")
+            else:
+                view_box.linkView(pg.ViewBox.XAxis, "main")
+            view_box.setMouseEnabled(y=False)
+            view_box.setLimits(xMin=0, xMax=x[-1])
+            view_box.setRange(yRange=(y_min-margin, y_max+margin))
+
+            self.lines.append(plot_item.addLine(x=0, pen=pg.mkPen(color=(255, 0, 0))))
+
+        self.start_time = time.time()
+        self.end_time = self.repeats*sequence_time
+
+        for i in range(3):
+            self.sensors.append(Sensor(SensorData(), self.start_time, self.end_time))
+            self.thread_pool.start(self.sensors[i])
+            self.x_data.append([])
+            self.y_data.append([])
+        self.timer.start(10)
 
     def update_graphs(self):
         test = self.ui.graphicsView
-        curtime = time.time() - self.start
+        timestamp = time.time() - self.start_time
+
+        if timestamp > self.end_time:
+            self.end_experiment()
+            return
 
         for i in range(3):
-            newData = self.sensors[i].data.getData()
+            new_data = self.sensors[i].data.getData()
 
-            if newData is not None:
+            if new_data is not None:
                 plt = test.getItem(i, 0)
-
-                self.xdata[i].extend(newData[0])
-                self.ydata[i].extend(newData[1])
-                plt.listDataItems()[1].setData(x=self.xdata[i], y=self.ydata[i])
-            self.lines[i].setValue(curtime)
+                self.x_data[i].extend(new_data[0])
+                self.y_data[i].extend(new_data[1])
+                plt.listDataItems()[1].setData(x=self.x_data[i], y=self.y_data[i])
+            self.lines[i].setValue(timestamp)
 
 
 if __name__ == "__main__":

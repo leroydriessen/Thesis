@@ -85,7 +85,7 @@
        <string>times</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="lineEdit">
+     <widget class="QLineEdit" name="rampup">
       <property name="geometry">
        <rect>
         <x>20</x>
@@ -111,7 +111,7 @@
        <string>Repeat experiment</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="lineEdit_3">
+     <widget class="QLineEdit" name="repeats">
       <property name="geometry">
        <rect>
         <x>20</x>
@@ -137,7 +137,7 @@
        <string>Ramp up duration</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="lineEdit_2">
+     <widget class="QLineEdit" name="stimdur">
       <property name="geometry">
        <rect>
         <x>20</x>
@@ -163,7 +163,7 @@
        <string>Stimulation duration</string>
       </property>
      </widget>
-     <widget class="QTableWidget" name="tableWidget">
+     <widget class="QTableWidget" name="electrodeTable">
       <property name="geometry">
        <rect>
         <x>220</x>
@@ -316,7 +316,7 @@
        <string>seconds</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="lineEdit_4">
+     <widget class="QLineEdit" name="rampdown">
       <property name="geometry">
        <rect>
         <x>20</x>
@@ -342,7 +342,7 @@
        <string>Ramp down duration</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="lineEdit_5">
+     <widget class="QLineEdit" name="pause">
       <property name="geometry">
        <rect>
         <x>20</x>
@@ -406,7 +406,7 @@
      <number>0</number>
     </property>
    </widget>
-   <widget class="QLabel" name="label_9">
+   <widget class="QLabel" name="modelSelection">
     <property name="geometry">
      <rect>
       <x>210</x>
