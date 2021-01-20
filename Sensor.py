@@ -16,7 +16,7 @@ class Sensor(QRunnable):
         while not self.cancelled and timestamp < self.end_time:
             timestamp = time.time() - self.start_time
             time.sleep(random.uniform(0.1, 0.5))
-            self.data.append(timestamp, random.gauss(-0.01, 0.005))
+            self.data.append(timestamp, random.gauss(0.1, 0.05))
 
     def cancel(self):
         self.cancelled = True

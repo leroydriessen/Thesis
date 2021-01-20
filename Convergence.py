@@ -8,9 +8,9 @@ logging.disable(logging.INFO)
 logging.disable(25)  # SUMMARY logging
 logging.disable(logging.WARNING)
 
-mri = True  # Do convergence study on MRI (True) or non-MRI (False) data
-anode_center = [2.504336, 117.433159, 20.609865]
-cathode_center = [-0.649156, -91.816368, 2.778033]
+mri = False  # Do convergence study on MRI (True) or non-MRI (False) data
+anode_center = [67.797401, 12.015621, 65.832596]
+cathode_center = [-64.055664, 10.183576, 66.089241]
 ROI_center = [2.504336, 117.433159, 20.609865]
 ROI_radius = 20.
 
@@ -27,7 +27,8 @@ for x in resolutions:
     file = os.path.basename(filename)
 
     s = sim_struct.SESSION()
-    s.open_in_gmsh = False
+    s.open_in_gmsh = True
+    s.fields = 'v'
     s.fnamehead = filename
     if not os.path.isdir('convergence_output'):
         os.mkdir('convergence_output')
@@ -55,6 +56,7 @@ for x in resolutions:
     anode.centre = anode_center
 
     run_simnibs(s)
+
 ########################################################################################################################
     head_mesh = read_msh("convergence_output/" + file + "/" + os.path.splitext(file)[0] + "_TDCS_1_scalar.msh")
 

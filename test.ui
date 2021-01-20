@@ -13,11 +13,11 @@
   <property name="windowTitle">
    <string>Head Phantom Validator</string>
   </property>
-  <property name="accessibleName">
-   <string/>
-  </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QPushButton" name="pushButton">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>450</x>
@@ -164,6 +164,9 @@
       </property>
      </widget>
      <widget class="QTableWidget" name="electrodeTable">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
       <property name="geometry">
        <rect>
         <x>220</x>
@@ -172,36 +175,6 @@
         <height>221</height>
        </rect>
       </property>
-      <row>
-       <property name="text">
-        <string>Electrode 1</string>
-       </property>
-      </row>
-      <row>
-       <property name="text">
-        <string>Electrode 2</string>
-       </property>
-      </row>
-      <row>
-       <property name="text">
-        <string>Electrode 3</string>
-       </property>
-      </row>
-      <row>
-       <property name="text">
-        <string>Electrode 4</string>
-       </property>
-      </row>
-      <row>
-       <property name="text">
-        <string>Electrode 5</string>
-       </property>
-      </row>
-      <row>
-       <property name="text">
-        <string>Electrode 6</string>
-       </property>
-      </row>
       <column>
        <property name="text">
         <string>Current (mA)</string>
@@ -212,96 +185,6 @@
         <string>Show</string>
        </property>
       </column>
-      <item row="0" column="0">
-       <property name="text">
-        <string>1</string>
-       </property>
-      </item>
-      <item row="0" column="1">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="textAlignment">
-        <set>AlignCenter</set>
-       </property>
-       <property name="checkState">
-        <enum>Unchecked</enum>
-       </property>
-       <property name="flags">
-        <set>ItemIsUserCheckable|ItemIsEnabled</set>
-       </property>
-      </item>
-      <item row="1" column="0">
-       <property name="text">
-        <string>-0.5</string>
-       </property>
-      </item>
-      <item row="1" column="1">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="checkState">
-        <enum>Checked</enum>
-       </property>
-       <property name="flags">
-        <set>ItemIsUserCheckable|ItemIsEnabled</set>
-       </property>
-      </item>
-      <item row="2" column="0">
-       <property name="text">
-        <string>-0.5</string>
-       </property>
-      </item>
-      <item row="2" column="1">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="checkState">
-        <enum>Checked</enum>
-       </property>
-       <property name="flags">
-        <set>ItemIsUserCheckable|ItemIsEnabled</set>
-       </property>
-      </item>
-      <item row="3" column="0">
-       <property name="text">
-        <string>0</string>
-       </property>
-      </item>
-      <item row="3" column="1">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="checkState">
-        <enum>Checked</enum>
-       </property>
-      </item>
-      <item row="4" column="0">
-       <property name="text">
-        <string>0</string>
-       </property>
-      </item>
-      <item row="4" column="1">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="checkState">
-        <enum>Checked</enum>
-       </property>
-      </item>
-      <item row="5" column="0">
-       <property name="text">
-        <string>0</string>
-       </property>
-      </item>
-      <item row="5" column="1">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="checkState">
-        <enum>Unchecked</enum>
-       </property>
-      </item>
      </widget>
      <widget class="QLabel" name="label_6">
       <property name="geometry">
@@ -393,33 +276,36 @@
      </attribute>
     </widget>
    </widget>
-   <widget class="QProgressBar" name="progressBar">
+   <widget class="QLabel" name="info">
     <property name="geometry">
      <rect>
       <x>20</x>
       <y>330</y>
-      <width>181</width>
+      <width>421</width>
       <height>31</height>
      </rect>
     </property>
-    <property name="value">
-     <number>0</number>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Preferred" vsizetype="Ignored">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
     </property>
-   </widget>
-   <widget class="QLabel" name="modelSelection">
-    <property name="geometry">
-     <rect>
-      <x>210</x>
-      <y>330</y>
-      <width>231</width>
-      <height>31</height>
-     </rect>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
     </property>
     <property name="text">
      <string>No model selected</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
     </property>
    </widget>
    <widget class="Line" name="line">
@@ -430,6 +316,9 @@
       <width>531</width>
       <height>16</height>
      </rect>
+    </property>
+    <property name="lineWidth">
+     <number>1</number>
     </property>
     <property name="orientation">
      <enum>Qt::Horizontal</enum>
@@ -457,6 +346,12 @@
       <height>811</height>
      </rect>
     </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -472,8 +367,9 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionCreate_mesh"/>
     <addaction name="actionOpen_mesh"/>
+    <addaction name="actionCreate_mesh"/>
+    <addaction name="actionOpen_settings"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
@@ -486,15 +382,23 @@
     <string>Create mesh...</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+O</string>
+    <string>Ctrl+Shift+O</string>
    </property>
   </action>
   <action name="actionOpen_mesh">
    <property name="text">
     <string>Open mesh...</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
    <property name="shortcutContext">
     <enum>Qt::WindowShortcut</enum>
+   </property>
+  </action>
+  <action name="actionOpen_settings">
+   <property name="text">
+    <string>Open settings...</string>
    </property>
   </action>
  </widget>

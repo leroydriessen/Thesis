@@ -5,8 +5,10 @@ import time
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtWidgets, QtCore
+import simnibs
 
 from GUI import Ui_MainWindow
+from MeshCreation import MeshCreation
 from Sensor import Sensor
 from SensorData import SensorData
 from Simulation import Simulation
@@ -18,13 +20,7 @@ class ApplicationHandler:
         self.MainWindow = QtWidgets.QMainWindow()
         self.filename = ""
         self.ui = Ui_MainWindow()
-        self.ui.setupUi(self.MainWindow)
-        self.ui.actionOpen_mesh.triggered.connect(self.open_msh)
-        self.ui.actionCreate_mesh.triggered.connect(self.open_stl)
-        self.ui.pushButton.clicked.connect(self.run)
-        self.MainWindow.show()
         self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.update_graphs)
         self.lines = []
         self.freq = 100
         self.start_time = 0
@@ -35,13 +31,24 @@ class ApplicationHandler:
         self.pause = 10
         self.repeats = 5
         self.thread_pool = QtCore.QThreadPool()
-        self.thread_pool.setExpiryTimeout(5)
         self.x_data = []
         self.y_data = []
         self.sensors = []
-        self.full = True
+        self.electrodes = []
+        self.stimulators = []
+        self.observers = []
         self.running = False
-        self.electrodes = [[30, 55, -10], [-20, 20, 20], [30, 30, 30]]
+        self.tmp = []
+        self.tmp2 = []
+
+        self.ui.setupUi(self.MainWindow)
+        self.ui.actionOpen_mesh.triggered.connect(self.open_msh)
+        self.ui.actionCreate_mesh.triggered.connect(self.open_stl)
+        self.ui.actionOpen_settings.triggered.connect(self.open_settings)
+        self.ui.pushButton.clicked.connect(self.start_stop)
+        self.timer.timeout.connect(self.update_graphs)
+        self.thread_pool.setExpiryTimeout(5)
+        self.MainWindow.show()
 
         test = self.ui.graphicsView
         test.setBackground((0, 0, 0, 0))
@@ -51,102 +58,157 @@ class ApplicationHandler:
         self.thread_pool.waitForDone()
         sys.exit(code)
 
-    def open_msh(self):
-        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "QtWidgets.QFileDialog.getOpenFileName()")
-        file = os.path.basename(self.filename)
-        self.ui.progressBar.setProperty("value", 100)
+    def info(self, text):
+        self.ui.info.setText(text)
+
+    def set_file(self, path):
+        file = os.path.basename(path)
         if file == "":
-            self.ui.modelSelection.setText("No model selected")
+            self.ui.pushButton.setEnabled(False)
+            info = "No model selected"
         else:
-            self.ui.modelSelection.setText("Selected: " + file)
+            self.filename = path
+            self.ui.pushButton.setEnabled(True)
+            info = "Selected: " + file
+        self.info(info)
+        assert self.ui.pushButton.text() == "Run"
+
+    def open_settings(self):
+        settings, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "Open settings", "./", "CSV file (*.csv)")
+        if settings == "":
+            return
+        file = open(settings).readlines()
+        self.ui.electrodeTable.setRowCount(len(file)-1)
+        header = file[0].split(",")
+        header = [x.lower().strip("\n") for x in header]
+        assert header == ['name', 'read', 'write', 'x', 'y', 'z']
+
+        table = self.ui.electrodeTable
+        for i, line in enumerate(file[1:]):
+            line = line.split(",")
+            line[-1] = line[-1].strip("\n")
+            if line[2].lower() == "true":
+                electrode = simnibs.simulation.ELECTRODE()
+                electrode.name = line[0]
+                electrode.centre = [line[3], line[4], line[5]]
+                electrode.channelnr = i
+                electrode.thickness = 5
+                electrode.shape = 'rect'
+                electrode.dimensions = [30, 30]
+                self.electrodes.append(electrode)
+
+                row = QtWidgets.QTableWidgetItem()
+                row.setText(electrode.name)
+                table.setVerticalHeaderItem(i, row)
+
+                cell = QtWidgets.QTableWidgetItem()
+                cell.setText("0")
+                table.setItem(i, 0, cell)
+
+                cell = QtWidgets.QTableWidgetItem()
+                if line[1].lower() == "true":
+                    cell.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+                    cell.setCheckState(QtCore.Qt.Unchecked)
+                else:
+                    cell.setFlags(QtCore.Qt.ItemIsUserCheckable)
+                table.setItem(i, 1, cell)
+                # test += 1
+                pass
+            elif line[2].lower() == "false":
+                electrode = simnibs.simulation.ELECTRODE()
+                electrode.name = line[0]
+                electrode.centre = [line[3], line[4], line[5]]
+                self.electrodes.append(electrode)
+
+                row = QtWidgets.QTableWidgetItem()
+                row.setText(electrode.name)
+                table.setVerticalHeaderItem(i, row)
+
+                cell = QtWidgets.QTableWidgetItem()
+                cell.setText("")
+                table.setItem(i, 0, cell)
+
+                cell = QtWidgets.QTableWidgetItem()
+                if line[1].lower() == "true":
+                    cell.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+                    cell.setCheckState(QtCore.Qt.Unchecked)
+                else:
+                    cell.setFlags(QtCore.Qt.ItemIsUserCheckable)
+                table.setItem(i, 1, cell)
+                pass
+            else:
+                raise Exception("wow")
+
+        self.ui.electrodeTable.setColumnWidth(1, 20)
+        self.ui.electrodeTable.setEnabled(True)
+
+    def open_msh(self):
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "Open .msh file", "./", "Msh files (*.msh)")
+        self.set_file(filename)
 
     def open_stl(self):
-        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "QtWidgets.QFileDialog.getOpenFileName()")
-        # TODO
-        # import gmsh_api.gmsh as gmsh
-        # filename = 'model'
-        #
-        # if not os.path.isfile('models/nonMRI/{0}/{0}.msh'.format(filename)):
-        #     print("{0}.msh file does not exist yet, creating one from .stl files".format(filename))
-        #     gmsh.initialize()
-        #     current = 1
-        #     if not os.path.isfile('models/nonMRI/{0}/{0}Scalp.stl'.format(filename)):
-        #         raise FileNotFoundError("Scalp stl file does not exist")
-        #     gmsh.merge('models/nonMRI/{0}/{0}Scalp.stl'.format(filename))
-        #     gmsh.model.geo.addSurfaceLoop([current], 5)
-        #
-        #     print("Added Scalp information")
-        #     current = current + 1
-        #     if os.path.isfile('models/nonMRI/{0}/{0}Skull.stl'.format(filename)):
-        #         gmsh.merge('models/nonMRI/{0}/{0}Skull.stl'.format(filename))
-        #         gmsh.model.geo.addSurfaceLoop([current], 4)
-        #         gmsh.model.geo.addVolume([4], 4)
-        #         print("Added Skull information")
-        #         current = current + 1
-        #     if os.path.isfile('models/nonMRI/{0}/{0}Brain.stl'.format(filename)):
-        #         gmsh.merge('models/nonMRI/{0}/{0}Brain.stl'.format(filename))
-        #         gmsh.model.geo.addSurfaceLoop([current], 2)
-        #
-        #         print("Added Brain information")
-        #
-        #     gmsh.model.geo.addVolume([5, 2], 5)
-        #     gmsh.model.geo.addVolume([2], 2)
-        #     gmsh.model.geo.synchronize()
-        #     print("Generating mesh...")
-        #     gmsh.model.mesh.generate(3)
-        #     print("Writing mesh")
-        #     gmsh.write('models/nonMRI/{0}/{0}.msh'.format(filename))
-        #     gmsh.finalize()
-        #     print("Successfully created {0}.msh".format(filename))
+        scalp_file, _ = QtWidgets.QFileDialog.getOpenFileName(self.MainWindow, "Open scalp .stl file", "./", "3D scalp files (*Scalp.stl)")
+        mesh_creation = MeshCreation(scalp_file)
+        mesh_creation.communication.status_info.connect(self.info)
+        mesh_creation.communication.filename.connect(self.set_file)
+        self.thread_pool.start(mesh_creation)
 
     def end_experiment(self):
+        self.info("Finished!")
         self.thread_pool.waitForDone()
-        self.running = False
         self.timer.stop()
         self.sensors = []
-        self.ui.pushButton.setText("Run")
+        self.observers = []
+        self.stimulators = []
+        self.ui.tabWidget.setEnabled(True)
+        self.ui.pushButton.setText("Run again")
 
     def restart(self):
-        self.running = False
         self.timer.stop()
         self.x_data = []
         self.y_data = []
         for sensor in self.sensors:
             sensor.cancel()
         self.sensors = []
-        self.thread_pool.waitForDone()
+        self.observers = []
+        self.stimulators = []
         self.ui.graphicsView.clear()
         self.ui.pushButton.setText("Run")
+        self.set_file(self.filename)
         self.lines = []
+        self.running = False
+        self.ui.tabWidget.setEnabled(True)
+        self.thread_pool.waitForDone()
 
-    def run(self):
+    def start_stop(self):
         if self.running:
             self.restart()
-        else:
-            if self.filename == "" and not self.full:
-                print("No model selected!")
+            return
+        self.restart()
+        self.running = True
+        self.info("Simulating model... (can take a while)")
+
+        self.ui.pushButton.setEnabled(False)
+        self.ui.pushButton.setCheckable(True)
+        self.ui.pushButton.setChecked(True)
+        self.ui.tabWidget.setEnabled(False)
+        self.ui.pushButton.setText("Stop")
+
+        currents = []
+        table = self.ui.electrodeTable
+        for x in range(table.rowCount()):
+            if table.item(x, 0).text() != '' and table.item(x, 0).text() != '0':
+                self.stimulators.append(self.electrodes[x])
+                currents.append(float(self.ui.electrodeTable.item(x, 0).text())/1000)
             else:
-                if self.filename == "":
-                    self.filename = "/home/leroy/Thesis/Code/models/nonMRI/sphere_models/sphere100.msh"
-
-                self.restart()
-
-                self.running = True
-                self.ui.pushButton.setDisabled(True)
-                self.ui.pushButton.setCheckable(True)
-                self.ui.pushButton.setChecked(True)
-                self.ui.pushButton.setText("Stop")
-                currents = []
-                for x in range(3):
-                    currents.append(float(self.ui.electrodeTable.item(x, 0).text())/1000)
-                if self.full:
-                    simulation = Simulation(self.filename, currents, self.electrodes)
-                    simulation.communication.peak.connect(self.experiment)
-                    self.thread_pool.start(simulation)
-                else:
-                    self.experiment(np.array([0.1, 0.2, 0.3]))
+                if table.item(x, 1).checkState() == QtCore.Qt.Checked:
+                    self.observers.append(self.electrodes[x])
+        simulation = Simulation(self.filename, currents, self.stimulators, self.observers)
+        simulation.communication.peak.connect(self.experiment)
+        self.thread_pool.start(simulation)
 
     def experiment(self, peak):
+        self.info("Running...")
         self.ui.pushButton.setDisabled(False)
         self.ui.pushButton.setCheckable(False)
 
@@ -177,6 +239,9 @@ class ApplicationHandler:
         y_range = y_max-y_min
         margin = 0.2*y_range
 
+        self.tmp = y + np.random.normal(0, 0.001, [len(self.observers), len(x)])
+        self.tmp2 = x
+
         for i in range(len(peak)):
             plot_item = self.ui.graphicsView.addPlot(row=i, col=0)
             plot_item.plot(x=x, y=y[i], pen=pg.mkPen(0.6, width=2), antialias=True)
@@ -198,7 +263,7 @@ class ApplicationHandler:
         self.start_time = time.time()
         self.end_time = self.repeats*sequence_time
 
-        for i in range(3):
+        for i in range(len(self.observers)):
             self.sensors.append(Sensor(SensorData(), self.start_time, self.end_time))
             self.thread_pool.start(self.sensors[i])
             self.x_data.append([])
@@ -213,14 +278,15 @@ class ApplicationHandler:
             self.end_experiment()
             return
 
-        for i in range(3):
+        for i in range(len(self.observers)):
             new_data = self.sensors[i].data.getData()
 
             if new_data is not None:
                 plt = test.getItem(i, 0)
                 self.x_data[i].extend(new_data[0])
                 self.y_data[i].extend(new_data[1])
-                plt.listDataItems()[1].setData(x=self.x_data[i], y=self.y_data[i])
+                # plt.listDataItems()[1].setData(x=self.x_data[i], y=self.y_data[i])
+                plt.listDataItems()[1].setData(x=self.tmp2[:int(timestamp*self.freq):4], y=self.tmp[i, :int(timestamp*self.freq):4])
             self.lines[i].setValue(timestamp)
 
 
